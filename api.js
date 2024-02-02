@@ -1,9 +1,12 @@
 const { request, gql } = require('graphql-request');
-const { getHashnodeRc } = require('./config');
 
-let hashnodeRc = getHashnodeRc()
-let token = hashnodeRc.token
 
+let token;
+let hashnodeBaseUrl = 'https://gql.hashnode.com';
+
+function setToken(_token) {
+  token = _token
+}
 const publishNewPostMutation = gql`
   mutation PublishPost($input: PublishPostInput!) {
     publishPost(input: $input) {
@@ -26,9 +29,9 @@ const updatePostMutation = gql`
   }
 `;
 
-const deletePostMutation = gql`
-  mutation UpdatePost($input: UpdatePostInput!) {
-    updatePost(input: $input) {
+const removePostMutation = gql`
+  mutation removePost($input: RemovePostInput!) {
+    removePost(input: $input) {
       post {
         id
         url
@@ -37,56 +40,49 @@ const deletePostMutation = gql`
   }
 `;
 const meQuery = gql`
-  mutation UpdatePost($input: UpdatePostInput!) {
-    updatePost(input: $input) {
-      post {
-        id
-        url
+  query User{
+    me {
+      id
+      username
+      name
+      publications(first: 50){
+        edges {
+          node{
+            id
+            title
+            url
+          }
+        }
       }
     }
   }
 `;
-await gqlClient.request(publishNewPostQuery, {
-    input: {
-      title,
-      subtitle,
-      publicationId: loggedInUser.hashnodePublicationId,
-      contentMarkdown: notionString.parent,
-      slug,
-      tags,
-      coverImageOptions: {
-        coverImageURL,
-      },
-    },
-  });
 
-data = await gqlClient.request(updatePostQuery, {
-input: {
-    id: hashnodeId,
-    title,
-    subtitle,
-    publicationId: loggedInUser.hashnodePublicationId,
-    contentMarkdown: notionString.parent,
-    slug,
-    tags,
-    coverImageOptions: {
-    coverImageURL,
-    },
-},
-});
-
-function createBlog(parsedFile) {
-
+async function getMyUser() {
+  return await request({ url: hashnodeBaseUrl, document: meQuery, requestHeaders: { "Authorization": token } })
+}
+async function updatePost(post) {
+  const input = post
+  return await request({ url: hashnodeBaseUrl, document: updatePostMutation, variables: { input }, requestHeaders: { "Authorization": token } })
+}
+async function removePost(postId) {
+  const input = {
+    id: postId
+  }
+  return await request({ url: hashnodeBaseUrl, document: removePostMutation, variables: { input }, requestHeaders: { "Authorization": token } })
+}
+async function publishPost(post) {
+  const input = {
+    ...post,
+    tags: []
+  }
+  return await request({ url: hashnodeBaseUrl, document: publishNewPostMutation, variables: { input }, requestHeaders: { "Authorization": token } })
 }
 
-function updateBlog(parsedFile) {
-
+module.exports = {
+  getMyUser,
+  publishPost,
+  setToken,
+  updatePost,
+  removePost
 }
-
-function deleteBlog(parsedFile) {
-
-}
-function getPublication() {
-    return 'publication';
-}
-await request('https://api.spacex.land/graphql/', document)

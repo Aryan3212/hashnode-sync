@@ -1,4 +1,6 @@
 const { getSyncedJson } = require('./sync-json');
+const path = require('path');
+const fs = require('fs');
 
 const hashnodeSyncPath = path.join(process.cwd(), '/hashnode-syncrc.json');
 const hashnodeSyncFileExists = fs.existsSync(hashnodeSyncPath);

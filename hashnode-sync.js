@@ -1,10 +1,12 @@
+#!/usr/bin/env node
+
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const crypto = require('crypto');
 const matter = require('gray-matter');
 const { hashnodeSyncFileExists, getHashnodeRc } = require('./config');
-// const api = require('./api');
+const { getMyUser, publishPost, setToken, updatePost, removePost } = require('./api');
 
 let hashnodeRc;
 const rl = readline.createInterface({
@@ -16,7 +18,6 @@ const answer = async question => await new Promise(resolve => {
     rl.question(question, resolve)
 })
 async function main() {
-
     try {
         let userWish;
         if (hashnodeSyncFileExists) {
@@ -42,50 +43,81 @@ async function main() {
                 hashnodeRc.token = input;
             }
         }
-
+        setToken(hashnodeRc.token)
+        const user = await getMyUser()
         if (!hashnodeRc.initialized && !hashnodeRc.publication) {
             console.log('Please setup a default publication in settings and you can also specify the publication in your file\'s frontmatter');
             console.log('PS: The `publication` is the URL of your blog. 1 person can have numerous blogs.');
-            const input = await answer('Input your default publication: ');
+            console.log('~~~~~~~~')
+            console.log('Here are your publications and their IDs:')
+            user.me.publications.edges.forEach((edge, idx)=> {
+                console.log(`${idx + 1}. id: ${edge.node.id}, url: ${edge.node.url}`)
+            })
+            console.log('Here are your publications and their IDs:')
+            const input = await answer(`Input your default publication's id (default: ${user.me.publications.edges[0].node.url}): `);
             if (input) {
-                hashnodeRc.publication = input;
+                hashnodeRc.default_publication = input;
+            } else {
+                hashnodeRc.default_publication = user.me.publications.edges[0].node.id
             }
             hashnodeRc.initialized = true;
         }
 
         const markdownFiles = getMarkdownFiles(process.cwd());
-        markdownFiles.forEach(file => {
+        const syncs = markdownFiles.map(async file => {
             const parsedFile = matter.read(path.join(process.cwd(), file))
+            if (!Object.keys(parsedFile.data).length) {
+                console.log(file, ' has been skipped since it doesn\'t have the required metadata')
+            }
             const fileHash = getFileContentHash(parsedFile.content + JSON.stringify(parsedFile.data))
             if (hashnodeRc.blogs[file] && fileHash !== hashnodeRc.blogs[file].hash) {
-                const { id, url, publishStatus } = {
-                    id: 'created',
-                    url: '/blog-1',
-                    publishStatus: 'SCHEDULED'
+                const post = {
+                    id: hashnodeRc.blogs[file].id,
+                    title: parsedFile.data.title,
+                    subtitle: parsedFile.data.subtitle,
+                    publicationId: parsedFile.data.publicationId || hashnodeRc.default_publication,
+                    contentMarkdown: parsedFile.content,
+                    tags: []
                 }
                 console.log('Syncing post for ', file)
+                let res;
+                if (parsedFile.data.status === 'DELETE') {
+                    res = await removePost(hashnodeRc.blogs[file].id)
+                    console.log(`Blog associated with ${file}, url: ${hashnodeRc.blogs[file].url} was deleted`)
+                    return
+                } else {
+                    res = await updatePost(post)
+                }
                 hashnodeRc.blogs = {
                     ...hashnodeRc.blogs,
                     [file]: {
                         "status": parsedFile.status || "",
-                        "url": file.split('.')[0],
-                        "id": "created",
+                        "url": hashnodeRc.blogs[file].url,
+                        "id": hashnodeRc.blogs[file].id,
                         "hash": fileHash
                     }
                 }
             } else if (!hashnodeRc.blogs[file]) {
-                const { id, url, publishStatus } = {
-                    id: 'created',
-                    url: '/blog-1',
-                    publishStatus: 'SCHEDULED'
+                const post = {
+                    title: parsedFile.data.title,
+                    subtitle: parsedFile.data.subtitle,
+                    publicationId: parsedFile.data.publicationId || hashnodeRc.default_publication,
+                    contentMarkdown: parsedFile.content,
+                    tags: []
                 }
-                console.log('Creating blog post for ', file)
+                let res;
+                if (parsedFile.data.status === 'PUBLISH') {
+                    res = await publishPost(post)
+                } else {
+                    return
+                }
+                console.log('Created blog post for ', file)
                 hashnodeRc.blogs = {
                     ...hashnodeRc.blogs,
                     [file]: {
-                        "status": parsedFile.status || "",
-                        "url": file.split('.')[0],
-                        "id": "created",
+                        "status": parsedFile.status,
+                        "url": res.publishPost.post.url,
+                        "id": res.publishPost.post.id,
                         "hash": fileHash
                     }
                 }
@@ -93,7 +125,15 @@ async function main() {
                 console.log(file +' has already been created and no change was detected!')
             }
         })
+        const debug = await Promise.allSettled(syncs)
+        debug.forEach(d => {
+            if (d.status === 'rejected') {
+                console.log(d.reason)
+            }
+        })
         return;
+    } catch (err) {
+        console.error(err)
     }
     finally {
         rl.close()
@@ -110,6 +150,5 @@ function getFileContentHash(fileContent) {
     const fileHash = crypto.createHash('sha256').update(fileContent).digest('base64');
     return fileHash
 }
-
 
 main()

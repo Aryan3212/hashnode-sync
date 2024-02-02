@@ -15,5 +15,8 @@
     "graphql": "^16.8.1",
     "graphql-request": "^6.1.0",
     "gray-matter": "^4.0.3"
+  },
+ "bin": {
+  "hashnode-sync": "./hashnode-sync.js"
   }
 }
