@@ -1,0 +1,19 @@
+{
+  "name": "hashnode-sync",
+  "version": "0.0.1",
+  "description": "Sync markdown files with hashnode from your terminal!",
+  "main": "hashnode-sync.js",
+  "scripts": {
+    "test": "node hashnode-sync.test.js"
+  },
+  "keywords": [
+    "apihackathon"
+  ],
+  "author": "Aryan Rahman",
+  "license": "ISC",
+  "dependencies": {
+    "graphql": "^16.8.1",
+    "graphql-request": "^6.1.0",
+    "gray-matter": "^4.0.3"
+  }
+}
